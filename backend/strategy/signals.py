@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 import pandas as pd
-from config.settings import RSI_LONG_MAX, RSI_SHORT_MIN, VOL_MULT
+from config.settings import RSI_LONG_MAX, RSI_SHORT_MIN, VOL_MULT, EMA_FAST, EMA_SLOW
 
 Direction = Literal["LONG", "SHORT", "FLAT"]
 _REQUIRED = ("ema_fast", "ema_slow", "macd_hist", "rsi", "atr", "vol_ma")
@@ -49,7 +49,7 @@ def generate_signal(df: pd.DataFrame) -> Signal:
         return Signal("FLAT", "no EMA crossover", rsi=rsi, atr=atr, macd_hist=macd_hist, vol_ratio=vol_ratio)
 
     direction: Direction = "LONG" if long_cross else "SHORT"
-    reasons = [f"EMA{int(curr['ema_fast'])} × EMA crossover"]
+    reasons = [f"EMA{EMA_FAST}/{EMA_SLOW} crossover"]
 
     # ── Rule 2: RSI gate ───────────────────────────────────────────────────
     if direction == "LONG" and rsi >= RSI_LONG_MAX:

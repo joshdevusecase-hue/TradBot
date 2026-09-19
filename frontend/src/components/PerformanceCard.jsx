@@ -13,9 +13,12 @@ export default function PerformanceCard() {
 
   const run = () => {
     setLoading(true);
-    api.get(`/backtest?days=${days}`)
+    api.get(`/backtest?days=${days}`, { timeout: 120_000 })
       .then(r => setResult(r.data))
-      .catch(() => setResult({ error: "Backtest failed — check backend logs." }))
+      .catch(err => {
+        const detail = err?.response?.data?.detail ?? err?.message ?? "unknown error";
+        setResult({ error: `Backtest failed: ${detail}` });
+      })
       .finally(() => setLoading(false));
   };
 
