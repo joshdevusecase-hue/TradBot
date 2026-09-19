@@ -1,0 +1,145 @@
+/* ── Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --bg:           #0d1117;
+  --surface:      #161b22;
+  --surface-alt:  #1c2128;
+  --border:       #30363d;
+  --text:         #e6edf3;
+  --text-muted:   #8b949e;
+  --accent:       #58a6ff;
+  --green:        #3fb950;
+  --red:          #f85149;
+  --yellow:       #e3b341;
+  --radius:       8px;
+}
+
+/* ── Reset / Base ────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── App shell ───────────────────────────────────────────────────────── */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+}
+.header-brand { display: flex; align-items: center; gap: 10px; }
+.header-logo { font-size: 20px; }
+.header-name { font-size: 18px; font-weight: 700; color: var(--text); }
+.header-sub { font-size: 12px; color: var(--text-muted); background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; }
+
+/* ── Status bar ──────────────────────────────────────────────────────── */
+.status-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.status-left, .status-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.status-loading { color: var(--text-muted); font-size: 13px; }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dot-active { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 1.4s infinite; }
+.dot-idle   { background: var(--text-muted); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.status-label { font-size: 13px; color: var(--text-muted); }
+.status-symbol { font-size: 12px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.badge { font-size: 11px; font-weight: 600; border-radius: 4px; padding: 2px 7px; }
+.badge-paper { background: #1f2d1f; color: var(--green); border: 1px solid #2a4a2a; }
+.badge-live  { background: #2d1f1f; color: var(--red);   border: 1px solid #4a2a2a; }
+
+.signal-chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 4px; }
+.signal-long  { background: #1f2d1f; color: var(--green); }
+.signal-short { background: #2d1f1f; color: var(--red); }
+.signal-flat  { background: var(--surface-alt); color: var(--text-muted); }
+.signal-reason { font-size: 12px; color: var(--text-muted); max-width: 500px; }
+
+/* ── Main grid ───────────────────────────────────────────────────────── */
+.app-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 20px 24px;
+  align-items: start;
+}
+@media (max-width: 900px) { .app-main { grid-template-columns: 1fr; } }
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.empty-msg { color: var(--text-muted); font-size: 13px; }
+.error-msg { color: var(--red); font-size: 13px; }
+
+/* ── Open Position ───────────────────────────────────────────────────── */
+.pos-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+@media (max-width: 500px) { .pos-grid { grid-template-columns: 1fr 1fr; } }
+.pos-field { display: flex; flex-direction: column; gap: 2px; }
+.pos-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.pos-value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pos-reason { font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border); padding-top: 10px; }
+.return-badge { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.dir-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+.dir-long  { background: #1f2d1f; color: var(--green); }
+.dir-short { background: #2d1f1f; color: var(--red); }
+
+.pnl-pos { color: var(--green); }
+.pnl-neg { color: var(--red); }
+
+/* ── Equity curve ────────────────────────────────────────────────────── */
+.equity-card .recharts-cartesian-grid-horizontal line,
+.equity-card .recharts-cartesian-grid-vertical  line { stroke: var(--border); }
+
+/* ── Perf strip ──────────────────────────────────────────────────────── */
+.perf-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.perf-stat  { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
+.perf-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.perf-value { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ── Trade table ─────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+.trade-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.trade-table th { text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.trade-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.trade-table tbody tr:hover { background: var(--surface-alt); }
+.row-win td:first-child { border-left: 3px solid var(--green); }
+.row-loss td:first-child { border-left: 3px solid var(--red); }
+.open-tag { font-size: 11px; color: var(--yellow); background: #2a2212; border: 1px solid #4a3a14; border-radius: 4px; padding: 1px 6px; }
+.reason-cell { color: var(--text-muted); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.date-cell   { color: var(--text-muted); font-size: 12px; }
+
+/* ── Backtest card ───────────────────────────────────────────────────── */
+.bt-controls { display: flex; gap: 8px; align-items: center; }
+.bt-select {
+  background: var(--surface-alt); color: var(--text); border: 1px solid var(--border);
+  border-radius: 4px; padding: 4px 8px; font-size: 13px; cursor: pointer;
+}
+.bt-btn {
+  background: var(--accent); color: #0d1117; border: none; border-radius: 4px;
+  padding: 5px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: opacity .15s;
+}
+.bt-btn:hover { opacity: .85; }
+.bt-btn:disabled { opacity: .5; cursor: not-allowed; }

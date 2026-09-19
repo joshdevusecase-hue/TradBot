@@ -1,0 +1,54 @@
+import ccxt
+import pandas as pd
+from config.settings import (
+    BINANCE_API_KEY, BINANCE_SECRET, PAPER_MODE,
+    SYMBOL, TIMEFRAME, CANDLE_LIMIT,
+)
+
+
+def _build_exchange() -> ccxt.binance:
+    exchange = ccxt.binance({
+        "apiKey": BINANCE_API_KEY,
+        "secret": BINANCE_SECRET,
+        "enableRateLimit": True,
+        "options": {
+            "defaultType": "spot",
+            # Testnet doesn't support /sapi wallet endpoints — skip them.
+            "fetchCurrencies": False,
+        },
+    })
+    if PAPER_MODE:
+        exchange.set_sandbox_mode(True)
+    return exchange
+
+
+_exchange: ccxt.binance = _build_exchange()
+
+
+def fetch_ohlcv(symbol: str = SYMBOL, timeframe: str = TIMEFRAME, limit: int = CANDLE_LIMIT) -> pd.DataFrame:
+    """Fetch the latest `limit` candles for `symbol` from Binance.
+
+    Returns a DataFrame with columns: timestamp, open, high, low, close, volume.
+    timestamp is a timezone-aware UTC datetime.
+    """
+    raw = _exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+    df = pd.DataFrame(raw, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    df = df.set_index("timestamp")
+    return df.astype(float)
+
+
+def fetch_ticker(symbol: str = SYMBOL) -> dict:
+    """Return the current ticker (last price, bid, ask) for `symbol`."""
+    return _exchange.fetch_ticker(symbol)
+
+
+def get_exchange() -> ccxt.binance:
+    return _exchange
+
+
+if __name__ == "__main__":
+    print(f"Paper mode: {PAPER_MODE}")
+    df = fetch_ohlcv()
+    print(f"Fetched {len(df)} candles for {SYMBOL} ({TIMEFRAME})")
+    print(df.tail())
