@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,8 +37,8 @@ MAX_HOLD_HRS: int = 23      # hard time-exit after this many hours
 DASHBOARD_HOST: str = "0.0.0.0"
 DASHBOARD_PORT: int = 8000
 
-# Database
-DB_PATH: str = "tradbot.db"
+# Database (absolute, so every launch folder uses the same file)
+DB_PATH: str = str(Path(__file__).resolve().parent.parent / "tradbot.db")
 
 # Portfolio
 STARTING_CAPITAL: float = 10_000.0  # USD, used for paper mode sizing and backtest

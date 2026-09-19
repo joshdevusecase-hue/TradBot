@@ -39,6 +39,8 @@ Paper mode: **ON** (PAPER_MODE=true in .env). No real money is at risk.
 | `state.py` module dict | Thread-safe shared state between scheduler thread and FastAPI async loop |
 | Centralised `db.py` | Single SQLAlchemy Base + engine avoids circular imports |
 | Backtest uses public Binance | No auth needed for historical OHLCV; testnet keys not required |
+| `UTCDateTime` column type (db.py) | SQLite drops UTC offsets; trade times are stored naive-UTC and returned aware-UTC so time-exit math works |
+| Absolute `DB_PATH` | The bot always uses `backend/tradbot.db`, whichever folder it's launched from |
 
 ---
 
@@ -126,6 +128,8 @@ npm run dev                        # React at http://localhost:5173
 
 Swagger API docs auto-generated at: http://localhost:8000/docs
 
+If the dashboard's status bar says **Backend offline**, the backend isn't running. Start it as above. (Vite's dev proxy answers with an empty HTTP 500 when the backend is down, so a bare 500 in the browser usually means "not running", not a server bug.)
+
 ---
 
 ## Environment variables (.env — never commit)
@@ -151,6 +155,6 @@ Goal: add a GradientBoostingClassifier as a final gate in `strategy/signals.py` 
 ## Known issues / TODOs
 
 - `executor/orders.py` is written but untested on live Binance (intentional — stay in paper mode until backtest Sharpe > 1.0)
-- Backtest uses 1h candles per-hour loop which is slow for 365-day runs (~2160 candles) — acceptable for now
+- Backtest replays candle by candle; 90 days (~2,160 candles) takes ~4s, 365 days takes longer (frontend timeout is 120s)
 - No authentication on the FastAPI endpoints (localhost-only, personal use, acceptable)
-- `dashboard/app.py` unused `BackgroundTasks` import — harmless, can clean up later
+- Latest 90-day backtest (2026-09-19): 20 trades, -2.16% return, 35% win rate, Sharpe -1.62. Below the Sharpe > 1.0 gate, so stay in paper mode

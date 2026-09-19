@@ -1,8 +1,13 @@
 import logging
+import sys
 import uvicorn
 from db import init_db
 from scheduler import create_scheduler
 from dashboard.app import app  # noqa: F401 — imported for uvicorn
+
+# Piped or redirected output on Windows defaults to cp1252, which can't encode signal text like "≥".
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,21 +17,21 @@ logging.basicConfig(
 
 
 def main() -> None:
-    print("\n" + "═" * 56)
+    print("\n" + "=" * 56)
     print("  TradBot starting up")
-    print("═" * 56)
+    print("=" * 56)
 
     # Ensure all DB tables exist
     init_db()
-    print("  ✓ Database ready")
+    print("  [OK] Database ready")
 
     # Start the hourly pipeline scheduler (runs in background thread)
     scheduler = create_scheduler()
     scheduler.start()
-    print("  ✓ Scheduler started — first pipeline run beginning now")
-    print("  ✓ Dashboard API → http://localhost:8000")
-    print("  ✓ React dashboard → cd frontend && npm run dev")
-    print("═" * 56 + "\n")
+    print("  [OK] Scheduler started - first pipeline run beginning now")
+    print("  [OK] Dashboard API -> http://localhost:8000")
+    print("  [OK] React dashboard -> cd frontend && npm run dev")
+    print("=" * 56 + "\n")
 
     # Block on the FastAPI server
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")

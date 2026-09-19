@@ -19,6 +19,7 @@ def get_performance() -> dict:
     if not closed:
         return {
             "total_pnl": 0.0,
+            "total_return_pct": 0.0,
             "win_rate": 0.0,
             "total_trades": 0,
             "winning_trades": 0,
@@ -26,7 +27,7 @@ def get_performance() -> dict:
             "avg_loss": 0.0,
             "rr_ratio": 0.0,
             "sharpe": 0.0,
-            "max_drawdown": 0.0,
+            "max_drawdown_pct": 0.0,
             "portfolio_value": STARTING_CAPITAL,
         }
 
@@ -59,6 +60,7 @@ def get_performance() -> dict:
 
     return {
         "total_pnl": round(total_pnl, 2),
+        "total_return_pct": round(total_pnl / STARTING_CAPITAL * 100, 2),
         "win_rate": round(win_rate, 1),
         "total_trades": len(closed),
         "winning_trades": len(wins),
@@ -66,7 +68,7 @@ def get_performance() -> dict:
         "avg_loss": round(avg_loss, 2),
         "rr_ratio": round(rr_ratio, 2),
         "sharpe": round(sharpe, 2),
-        "max_drawdown": round(max_dd, 2),
+        "max_drawdown_pct": round(max_dd, 2),
         "portfolio_value": round(STARTING_CAPITAL + total_pnl, 2),
     }
 

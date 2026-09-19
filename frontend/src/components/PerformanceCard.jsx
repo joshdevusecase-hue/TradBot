@@ -16,8 +16,11 @@ export default function PerformanceCard() {
     api.get(`/backtest?days=${days}`, { timeout: 120_000 })
       .then(r => setResult(r.data))
       .catch(err => {
-        const detail = err?.response?.data?.detail ?? err?.message ?? "unknown error";
-        setResult({ error: `Backtest failed: ${detail}` });
+        const detail = err.response?.data?.detail;
+        let error = "No response from the backend. Make sure python main.py is running in the backend folder.";
+        if (detail) error = `Backtest failed: ${detail}`;
+        else if (err.code === "ECONNABORTED") error = "Backtest timed out after 2 minutes. Try a shorter period.";
+        setResult({ error });
       })
       .finally(() => setLoading(false));
   };
@@ -43,7 +46,7 @@ export default function PerformanceCard() {
         <p className="empty-msg">Click "Run backtest" to replay the strategy on historical Binance data.</p>
       )}
 
-      {loading && <p className="empty-msg">Fetching candles and replaying signal pipeline — this takes ~30s…</p>}
+      {loading && <p className="empty-msg">Fetching candles and replaying the strategy…</p>}
 
       {result?.error && <p className="error-msg">{result.error}</p>}
 
@@ -63,7 +66,7 @@ export default function PerformanceCard() {
               <LineChart data={result.equity_curve} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-muted)" }} tickLine={false} />
-                <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: "var(--text-muted)" }} tickLine={false} width={56} />
+                <YAxis domain={["auto", "auto"]} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} tick={{ fontSize: 10, fill: "var(--text-muted)" }} tickLine={false} width={56} />
                 <Tooltip formatter={v => [fmt$(v), "Portfolio"]} contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6 }} />
                 <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
               </LineChart>

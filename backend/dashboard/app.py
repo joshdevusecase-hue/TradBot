@@ -1,11 +1,14 @@
+import logging
 from datetime import datetime, timezone
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from db import engine, Trade
 from tracker.performance import get_performance, get_equity_curve
 from config.settings import PAPER_MODE, SYMBOL
 from state import bot_state
+
+logger = logging.getLogger("tradbot.api")
 
 app = FastAPI(title="TradBot API", version="1.0")
 
@@ -123,12 +126,11 @@ def get_equity_endpoint():
 
 # ── Backtest (runs synchronously — may take ~30s) ────────────────────────────
 
-_backtest_cache: dict | None = None
-
-
 @app.get("/api/backtest")
 def run_backtest_endpoint(days: int = 90):
-    global _backtest_cache
     from backtest.runner import run_backtest
-    _backtest_cache = run_backtest(days=days)
-    return _backtest_cache
+    try:
+        return run_backtest(days=days)
+    except Exception as e:
+        logger.exception("Backtest failed")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")

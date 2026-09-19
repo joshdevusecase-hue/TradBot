@@ -36,7 +36,7 @@ export default function EquityCurve() {
           <LineChart data={data} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="date" tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} />
-            <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} width={80} />
+            <YAxis domain={["auto", "auto"]} tickFormatter={fmt} tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickLine={false} width={80} />
             <Tooltip formatter={v => [fmt(v), "Portfolio"]} contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6 }} />
             <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
           </LineChart>

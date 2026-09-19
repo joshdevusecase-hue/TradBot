@@ -3,14 +3,28 @@ import api from "../api/client";
 
 export default function StatusBar() {
   const [status, setStatus] = useState(null);
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
-    const load = () => api.get("/status").then(r => setStatus(r.data)).catch(() => {});
+    const load = () => api.get("/status")
+      .then(r => { setStatus(r.data); setOffline(false); })
+      .catch(() => setOffline(true));
     load();
     const id = setInterval(load, 15000);
     return () => clearInterval(id);
   }, []);
 
+  if (offline) return (
+    <div className="status-bar status-offline">
+      <div className="status-left">
+        <span className="dot dot-offline" />
+        <span>
+          <strong className="offline-label">Backend offline.</strong> Start it with <code>python main.py</code> in
+          the <code>backend</code> folder. Checking again every 15s.
+        </span>
+      </div>
+    </div>
+  );
   if (!status) return <div className="status-bar status-loading">Connecting…</div>;
 
   const modeLabel = status.paper_mode ? "Paper" : "Live";

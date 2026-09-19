@@ -1,6 +1,8 @@
+from datetime import timezone
+
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime,
-    UniqueConstraint, create_engine,
+    TypeDecorator, UniqueConstraint, create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
 from config.settings import DB_PATH
@@ -14,6 +16,22 @@ engine = create_engine(
 
 class Base(DeclarativeBase):
     pass
+
+
+class UTCDateTime(TypeDecorator):
+    # SQLite drops the UTC offset, so store naive UTC and re-attach the offset on read.
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class Candle(Base):
@@ -40,8 +58,8 @@ class Trade(Base):
     quantity = Column(Float, nullable=False)
     sl_price = Column(Float, nullable=False)
     tp_price = Column(Float, nullable=False)
-    entry_time = Column(DateTime(timezone=True), nullable=False)
-    exit_time = Column(DateTime(timezone=True), nullable=True)
+    entry_time = Column(UTCDateTime, nullable=False)
+    exit_time = Column(UTCDateTime, nullable=True)
     pnl = Column(Float, nullable=True)
     exit_reason = Column(String, nullable=True)  # Take profit | Stop loss | Time exit
     signal_reason = Column(String, nullable=False)
