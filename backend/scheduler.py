@@ -12,7 +12,7 @@ def run_pipeline() -> None:
     bot_state["last_run"] = datetime.now(tz=timezone.utc).isoformat()
 
     try:
-        from data.fetcher import fetch_ohlcv, fetch_ticker
+        from data.fetcher import fetch_ohlcv, fetch_ticker, closed_candles
         from data.cache import upsert_candles, load_candles
         from strategy.indicators import compute_indicators
         from strategy.signals import generate_signal
@@ -20,7 +20,7 @@ def run_pipeline() -> None:
         # 1. Fetch + cache candles
         df_fresh = fetch_ohlcv()
         upsert_candles(df_fresh)
-        df = load_candles()
+        df = closed_candles(load_candles())
 
         if df.empty or len(df) < 50:
             logger.warning("Not enough candles yet — waiting for more data.")
@@ -61,10 +61,13 @@ def run_pipeline() -> None:
 
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone="UTC")
+    # Binance's hourly candles close on the UTC hour; judge each one 30s after it closes,
+    # the same close-price entry the backtest assumes.
     scheduler.add_job(
         run_pipeline,
-        trigger="interval",
-        hours=1,
+        trigger="cron",
+        minute=0,
+        second=30,
         id="pipeline",
         next_run_time=datetime.now(tz=timezone.utc),  # run immediately on startup
     )

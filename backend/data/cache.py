@@ -6,7 +6,7 @@ from config.settings import SYMBOL, TIMEFRAME, CANDLE_LIMIT
 
 
 def upsert_candles(df: pd.DataFrame, symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> None:
-    """Insert new candles; silently skip any that already exist (by unique constraint)."""
+    """Insert new candles and refresh existing ones, so a candle saved while still forming gets its final values."""
     rows = [
         {
             "symbol": symbol,
@@ -21,7 +21,11 @@ def upsert_candles(df: pd.DataFrame, symbol: str = SYMBOL, timeframe: str = TIME
         for ts, row in df.iterrows()
     ]
     with engine.begin() as conn:
-        stmt = sqlite_insert(Candle).values(rows).on_conflict_do_nothing()
+        stmt = sqlite_insert(Candle).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["symbol", "timeframe", "timestamp"],
+            set_={col: stmt.excluded[col] for col in ("open", "high", "low", "close", "volume")},
+        )
         conn.execute(stmt)
 
 

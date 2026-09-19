@@ -27,7 +27,10 @@ def take_profit_price(entry: float, atr: float, direction: str) -> float:
 
 
 def should_time_exit(entry_time: datetime) -> bool:
-    return (datetime.now(tz=timezone.utc) - entry_time) >= timedelta(hours=MAX_HOLD_HRS)
+    # Exits are checked hourly; rounding stops a few seconds of timing jitter from
+    # pushing the 23h exit to the next check at 24h.
+    held_hours = (datetime.now(tz=timezone.utc) - entry_time) / timedelta(hours=1)
+    return round(held_hours) >= MAX_HOLD_HRS
 
 
 def check_sl_tp(current_price: float, entry: float, sl: float, tp: float, direction: str) -> str | None:

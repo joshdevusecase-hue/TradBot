@@ -8,7 +8,7 @@ Build a personal, locally-hosted automated crypto trading bot for a **complete t
 - Uses **pure technical indicators** — transparent, no ML, no external data needed (Phase 1–7)
 - ML integration is planned as a separate future phase (Phase 8+)
 - Exposes a **local web dashboard** (user checks it manually, no push alerts)
-- Starts in **paper trading mode** (Binance testnet) — zero real money until the user is confident
+- Starts in **paper trading mode** (real market data, simulated fills) — zero real money until the user is confident
 - All historical data for backtesting is fetched **free from Binance's own API**
 - A `CONTEXT.md` in the project root keeps full project context for LLM handoffs
 
@@ -21,10 +21,10 @@ Build a personal, locally-hosted automated crypto trading bot for a **complete t
 ```mermaid
 flowchart TD
     subgraph External["External"]
-        BINANCE["Binance API\n(CCXT · testnet/live)"]
+        BINANCE["Binance API\n(CCXT · real market data;\norders only in live mode)"]
     end
 
-    subgraph Scheduler["Python Backend — Scheduler (runs every 1h)"]
+    subgraph Scheduler["Python Backend — Scheduler (hourly, 30s after each candle closes)"]
         direction TB
         FETCH["data/fetcher.py\nFetch OHLCV candles"]
         CACHE["data/cache.py\nSQLite candle cache"]
@@ -37,11 +37,12 @@ flowchart TD
     end
 
     subgraph Storage["Storage"]
-        DB["SQLite\ntrades · candles · performance"]
+        DB["SQLite\ntrades · candles"]
     end
 
     subgraph API["Python Backend — FastAPI (port 8000)"]
-        RT["/api/status\n/api/position\n/api/trades\n/api/performance\n/api/backtest"]
+        RT["/api/status\n/api/position\n/api/trades\n/api/performance\n/api/equity\n/api/backtest"]
+        BT["backtest/runner.py\nReplay strategy on 30–365 days"]
     end
 
     subgraph Frontend["React Frontend — Vite (port 5173)"]
@@ -49,11 +50,12 @@ flowchart TD
         POS["OpenPosition\nEntry · current price · P&L"]
         CHART["EquityCurve\nRecharts line chart"]
         LOG["TradeLog\nLast 50 trades table"]
+        PERF["PerformanceCard\nRun backtest · results chart"]
     end
 
     BINANCE -->|OHLCV| FETCH
     FETCH --> CACHE
-    CACHE --> IND
+    CACHE -->|closed candles only| IND
     IND --> SIG
     SIG --> RISK
     RISK -->|PAPER_MODE=true| EXEC_P
@@ -67,6 +69,9 @@ flowchart TD
     RT -->|JSON / Axios| POS
     RT -->|JSON / Axios| CHART
     RT -->|JSON / Axios| LOG
+    BINANCE -->|history| BT
+    BT --> RT
+    RT -->|JSON / Axios| PERF
 ```
 
 ---
@@ -104,9 +109,9 @@ flowchart TD
 | Layer | Technology | Purpose |
 |---|---|---|
 | Language | Python 3.11 | Main runtime |
-| Exchange | CCXT (Binance) | Unified exchange API; testnet for paper mode |
+| Exchange | CCXT (Binance) | Unified exchange API; public market data (orders only in live mode) |
 | Indicators | pandas-ta | EMA, MACD, RSI, ATR, Volume MA — one-line calls |
-| Scheduler | APScheduler | Run signal check every 1h automatically |
+| Scheduler | APScheduler | Run signal check each hour, 30s after the candle closes |
 | Database | SQLite (via SQLAlchemy) | Candle cache, trade log, P&L history |
 | Backend API | FastAPI (Python) | REST JSON API at http://localhost:8000 |
 | Frontend | React (Vite) | Dashboard UI at http://localhost:5173 |
@@ -132,15 +137,15 @@ TradBot/                     # repo root
 │   ├── config/
 │   │   └── settings.py      # All tunable params (thresholds, pairs, risk %)
 │   ├── data/
-│   │   ├── fetcher.py       # CCXT OHLCV fetch from Binance (+ testnet switch)
-│   │   └── cache.py         # SQLite candle store — only fetch new candles
+│   │   ├── fetcher.py       # CCXT OHLCV fetch from Binance + closed_candles() filter
+│   │   └── cache.py         # SQLite candle store — upsert refreshes half-finished candles
 │   ├── strategy/
 │   │   ├── indicators.py    # Compute EMA9/21, MACD, RSI14, ATR14, VolMA20
 │   │   └── signals.py       # Combine 4 indicators → LONG / SHORT / FLAT
 │   ├── risk/
 │   │   └── manager.py       # Position size, SL/TP prices, time-exit logic
 │   ├── executor/
-│   │   ├── orders.py        # Place market orders + OCO SL/TP via CCXT
+│   │   ├── orders.py        # Place market orders via CCXT (no exchange-side SL/TP yet)
 │   │   └── paper.py         # Paper engine: simulate fills when PAPER_MODE=true
 │   ├── tracker/
 │   │   ├── trades.py        # SQLAlchemy Trade model — log every trade
@@ -160,7 +165,8 @@ TradBot/                     # repo root
     │   │   ├── StatusBar.jsx
     │   │   ├── OpenPosition.jsx
     │   │   ├── EquityCurve.jsx
-    │   │   └── TradeLog.jsx
+    │   │   ├── TradeLog.jsx
+    │   │   └── PerformanceCard.jsx
     │   ├── api/
     │   │   └── client.js
     │   ├── App.jsx
@@ -174,11 +180,11 @@ TradBot/                     # repo root
 
 ## Configuration
 
-**.env (never committed):**
+**.env (never committed; optional in paper mode, see `backend/.env.example`):**
 ```
-BINANCE_API_KEY=your_key_here
-BINANCE_SECRET=your_secret_here
 PAPER_MODE=true
+BINANCE_API_KEY=   # live mode only
+BINANCE_SECRET=    # live mode only
 ```
 
 **config/settings.py:**
@@ -212,31 +218,31 @@ DASHBOARD_PORT= 8000
 - PLAN.md and CONTEXT.md written to project root
 - requirements.txt and frontend/package.json defined
 - .env.example and .gitignore created
-- data/fetcher.py: CCXT Binance init (testnet when PAPER_MODE=true), fetch last 200 1h candles
+- data/fetcher.py: CCXT Binance init (keyless public market data in paper mode), fetch last 200 1h candles
 - config/settings.py: all strategy params
 
-### Phase 2 — Candle Cache + Indicators
-- `data/cache.py`: SQLite candle table; only fetch candles newer than last stored
+### Phase 2 — Candle Cache + Indicators ✅
+- `data/cache.py`: SQLite candle table; upsert refreshes candles saved while still forming
 - `strategy/indicators.py`: EMA9/21, MACD hist, RSI14, ATR14, VolMA20 via pandas-ta
 
-### Phase 3 — Signal Engine
+### Phase 3 — Signal Engine ✅
 - `strategy/signals.py`: EMA crossover + RSI + MACD + Volume → Signal(direction, reason)
 
-### Phase 4 — Risk Manager + Executor
+### Phase 4 — Risk Manager + Executor ✅
 - `risk/manager.py`: size_position, stop_loss_price, take_profit_price, should_time_exit
 - `executor/paper.py`: simulate fills in paper mode
 - `executor/orders.py`: real CCXT orders (PAPER_MODE=false only)
 - `tracker/trades.py`: SQLAlchemy Trade model
 
-### Phase 5 — Scheduler (Main Loop)
-- `scheduler.py`: APScheduler 1h job — fetch → indicators → signal → risk → execute → log
+### Phase 5 — Scheduler (Main Loop) ✅
+- `scheduler.py`: APScheduler job at hh:00:30 UTC — fetch → closed candles → indicators → signal → risk → execute → log
 - `main.py`: start scheduler + FastAPI uvicorn together
 
-### Phase 6 — Dashboard (React + FastAPI)
+### Phase 6 — Dashboard (React + FastAPI) ✅
 - `dashboard/app.py`: FastAPI with CORS, JSON endpoints
-- `frontend/`: React Vite app with StatusBar, OpenPosition, EquityCurve, TradeLog
+- `frontend/`: React Vite app with StatusBar, OpenPosition, EquityCurve, TradeLog, PerformanceCard
 
-### Phase 7 — Backtesting
+### Phase 7 — Backtesting ✅
 - `backtest/runner.py`: fetch 1y Binance candles, replay pipeline, compute Sharpe
 - Gate: Sharpe > 1.0 before PAPER_MODE=false
 
@@ -261,7 +267,7 @@ DASHBOARD_PORT= 8000
 1. `cd backend && pip install -r requirements.txt` completes
 2. `cd backend && python main.py` → FastAPI at localhost:8000
 3. `cd frontend && npm run dev` → React at localhost:5173
-4. Fetcher returns valid candles from Binance testnet
+4. Fetcher returns valid candles from Binance (real market data)
 5. Indicators compute on 200-candle window with no NaN in last row
 6. Signal returns a Signal object with non-empty reason string
 7. Paper LONG → logged in SQLite → visible in dashboard

@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 import ccxt
 import pandas as pd
 
+from data.fetcher import closed_candles
 from strategy.indicators import compute_indicators
 from strategy.signals import generate_signal
 from risk.manager import (
@@ -53,7 +54,7 @@ def _fetch_historical(symbol: str, timeframe: str, days: int) -> pd.DataFrame:
 
 def run_backtest(symbol: str = SYMBOL, days: int = 90) -> dict:
     logger.info(f"Backtest starting: {symbol} last {days} days")
-    df_raw = _fetch_historical(symbol, TIMEFRAME, days)
+    df_raw = closed_candles(_fetch_historical(symbol, TIMEFRAME, days))
 
     if df_raw.empty or len(df_raw) < 60:
         return {"error": "Not enough historical data", "total_trades": 0}

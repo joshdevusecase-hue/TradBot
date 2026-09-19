@@ -7,19 +7,17 @@ from config.settings import (
 
 
 def _build_exchange() -> ccxt.binance:
-    exchange = ccxt.binance({
-        "apiKey": BINANCE_API_KEY,
-        "secret": BINANCE_SECRET,
+    # Paper mode only reads public market data, so it runs keyless against the real market.
+    keys = {} if PAPER_MODE else {"apiKey": BINANCE_API_KEY, "secret": BINANCE_SECRET}
+    return ccxt.binance({
+        **keys,
         "enableRateLimit": True,
         "options": {
             "defaultType": "spot",
-            # Testnet doesn't support /sapi wallet endpoints — skip them.
+            # Only market data is needed; skip the signed currency-metadata call.
             "fetchCurrencies": False,
         },
     })
-    if PAPER_MODE:
-        exchange.set_sandbox_mode(True)
-    return exchange
 
 
 _exchange: ccxt.binance = _build_exchange()
@@ -36,6 +34,12 @@ def fetch_ohlcv(symbol: str = SYMBOL, timeframe: str = TIMEFRAME, limit: int = C
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
     df = df.set_index("timestamp")
     return df.astype(float)
+
+
+def closed_candles(df: pd.DataFrame, timeframe: str = TIMEFRAME) -> pd.DataFrame:
+    """Drop the still-forming candle; the strategy only judges finished candles."""
+    candle = pd.Timedelta(seconds=ccxt.Exchange.parse_timeframe(timeframe))
+    return df[df.index + candle <= pd.Timestamp.now(tz="UTC")]
 
 
 def fetch_ticker(symbol: str = SYMBOL) -> dict:
