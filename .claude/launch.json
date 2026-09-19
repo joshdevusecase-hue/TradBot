@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tradbot-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 5173
+    },
+    {
+      "name": "tradbot-backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["backend/main.py"],
+      "port": 8000
+    },
+    {
+      "name": "preview-api",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["C:\\Users\\JOSHUA~1\\AppData\\Local\\Temp\\claude\\C--Users-Joshua-Stalin-OneDrive-Documents-TradBot\\91aa6645-7348-48a8-b7a6-c7bc889f192f\\scratchpad\\preview_server.py"],
+      "port": 8001
+    },
+    {
+      "name": "preview-frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set TRADBOT_API=http://localhost:8001&& npm run dev --prefix frontend -- --port 5174 --strictPort"],
+      "port": 5174
+    }
+  ]
+}

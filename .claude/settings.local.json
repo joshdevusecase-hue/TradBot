@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__visualize__show_widget",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(python -c \"from backtest.runner import run_backtest; print\\('import OK'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python backend/main.py --help)",
+      "PowerShell(try { Stop-Process -Id 34652 -Confirm:$false -ErrorAction Stop; \"stopped 34652\" } catch { \"not running: $\\($_.Exception.Message\\)\" })"
+    ]
+  }
+}
