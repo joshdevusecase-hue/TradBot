@@ -3,10 +3,11 @@
 ## Context
 
 Build a personal, locally-hosted automated crypto trading bot for a **complete trading beginner** that:
-- Trades **BTC/USDT on Binance** with no human intervention
+- Trades **BTC/USDT on Binance spot, buy-only**, with no human intervention
+- End goal: **live trading on the user's real Binance account**, within a USDT cap the user sets (Phase 9, after a strategy passes the gate)
 - Holds positions for a **maximum of 24 hours** (intraday swing)
-- Uses **pure technical indicators** — transparent, no ML, no external data needed (Phase 1–7)
-- ML integration is planned as a separate future phase (Phase 8+)
+- Uses **pure technical indicators** — transparent, no ML, no external data needed (Phase 1–8)
+- ML integration is planned as a separate future phase (Phase 10+)
 - Exposes a **local web dashboard** (user checks it manually, no push alerts)
 - Starts in **paper trading mode** (real market data, simulated fills) — zero real money until the user is confident
 - All historical data for backtesting is fetched **free from Binance's own API**
@@ -29,10 +30,10 @@ flowchart TD
         FETCH["data/fetcher.py\nFetch OHLCV candles"]
         CACHE["data/cache.py\nSQLite candle cache"]
         IND["strategy/indicators.py\nEMA9/21 · MACD · RSI · ATR · Vol"]
-        SIG["strategy/signals.py\nSignal: LONG / SHORT / FLAT + reason"]
+        SIG["strategy/signals.py\nBuy signal: LONG / FLAT + reason"]
         RISK["risk/manager.py\nPosition size · SL · TP · time-exit"]
-        EXEC_P["executor/paper.py\nPaper fill simulation"]
-        EXEC_L["executor/orders.py\nLive CCXT order placement"]
+        EXEC_P["executor/paper.py\nPaper fills · stop/target vs candle high/low"]
+        EXEC_L["executor/orders.py\nLive orders (Phase 9; startup blocked)"]
         TRACK["tracker/trades.py\nLog trade to SQLite"]
     end
 
@@ -42,7 +43,7 @@ flowchart TD
 
     subgraph API["Python Backend — FastAPI (port 8000)"]
         RT["/api/status\n/api/position\n/api/trades\n/api/performance\n/api/equity\n/api/backtest"]
-        BT["backtest/runner.py\nReplay strategy on 30–365 days"]
+        BT["backtest/runner.py + engine.py\nBuy-only · fees · intra-candle stops"]
     end
 
     subgraph Frontend["React Frontend — Vite (port 5173)"]
@@ -80,26 +81,30 @@ flowchart TD
 
 **Why pure technical indicators (no ML for now):**
 - Complete beginner → every trade must be explainable: "the bot bought because X happened"
-- No training data needed, no model to maintain, no overfitting risk
-- These 4 indicators have been used for decades on BTC with consistent results
+- No training data needed and no model to maintain
 - Easy to tune: changing one number changes one behaviour
+- Caveat: no simple indicator rule tested in this project has shown an edge after fees (see Phase 8)
 
-**Signal pipeline (all 4 must agree to enter a trade):**
+**Market:** Binance spot, **buy-only**. Spot can't sell BTC the account doesn't hold, so there are no short trades.
+
+**Buy signal (all 4 must agree, judged on the last closed hourly candle):**
 
 | # | Indicator | Rule | What it catches |
 |---|---|---|---|
-| 1 | EMA 9 / EMA 21 | EMA9 crosses above EMA21 → LONG; crosses below → SHORT | Trend direction |
-| 2 | RSI (14) | Only enter LONG if RSI < 65; only SHORT if RSI > 35 | Avoids entering at exhaustion peaks |
-| 3 | MACD (12/26/9) | Histogram must be positive (LONG) or negative (SHORT) | Momentum confirmation |
-| 4 | Volume | Current candle volume > 1.5× 20-period average | Ensures real move, not a fake-out |
+| 1 | EMA 9 / EMA 21 | EMA9 crosses above EMA21 | Trend turning up |
+| 2 | RSI (14) | RSI < 65 | Avoids buying at exhaustion peaks |
+| 3 | MACD (12/26/9) | Histogram positive | Momentum confirmation |
+| 4 | Volume | Candle volume ≥ 1.5× 20-period average | Ensures real move, not a fake-out |
 
 **Exit rules (whichever hits first):**
-- **Stop-loss:** 1.5× ATR(14) below entry — dynamic, adapts to market volatility
-- **Take-profit:** 2.5× ATR(14) above entry — gives ~1.67:1 reward-to-risk ratio
-- **Hard time-exit:** force-close after 23h regardless of P&L (max 1 day rule)
+- **Stop-loss:** 1.5× ATR(14) below entry, filled as soon as a candle touches it (like a resting exchange order)
+- **Take-profit:** 2.5× ATR(14) above entry, same; if one candle touches both, the stop is assumed to fill first
+- **Hard time-exit:** sell at the 23rd hourly check regardless of P&L (max 1 day rule)
+
+**Costs:** Binance spot fee of 0.1% per side (`FEE_PCT`), included in the backtest and in paper P&L.
 
 **Position sizing:**
-- Risk 2% of portfolio per trade (fixed-fraction method — industry standard for beginners)
+- Risk 2% of portfolio per trade (fixed-fraction), capped at 95% of the portfolio per position
 - Max 1 open trade at any time
 
 ---
@@ -141,7 +146,7 @@ TradBot/                     # repo root
 │   │   └── cache.py         # SQLite candle store — upsert refreshes half-finished candles
 │   ├── strategy/
 │   │   ├── indicators.py    # Compute EMA9/21, MACD, RSI14, ATR14, VolMA20
-│   │   └── signals.py       # Combine 4 indicators → LONG / SHORT / FLAT
+│   │   └── signals.py       # Combine 4 indicators → LONG / FLAT (buy-only)
 │   ├── risk/
 │   │   └── manager.py       # Position size, SL/TP prices, time-exit logic
 │   ├── executor/
@@ -153,7 +158,8 @@ TradBot/                     # repo root
 │   ├── dashboard/
 │   │   └── app.py           # FastAPI REST API routes (JSON only)
 │   ├── backtest/
-│   │   └── runner.py        # Replay pipeline on Binance historical candles
+│   │   ├── engine.py        # Buy-only simulation: fees, intra-candle stops, daily Sharpe
+│   │   └── runner.py        # Fetch Binance history + run the engine for /api/backtest
 │   ├── scheduler.py         # APScheduler: run full pipeline every 1h
 │   ├── main.py              # Entry point: start scheduler + FastAPI together
 │   ├── requirements.txt
@@ -195,7 +201,6 @@ EMA_FAST      = 9
 EMA_SLOW      = 21
 RSI_PERIOD    = 14
 RSI_LONG_MAX  = 65
-RSI_SHORT_MIN = 35
 MACD_FAST     = 12
 MACD_SLOW     = 26
 MACD_SIGNAL   = 9
@@ -206,6 +211,7 @@ SL_ATR_MULT   = 1.5
 TP_ATR_MULT   = 2.5
 RISK_PCT      = 2.0
 MAX_HOLD_HRS  = 23
+FEE_PCT       = 0.1
 DASHBOARD_PORT= 8000
 ```
 
@@ -243,14 +249,32 @@ DASHBOARD_PORT= 8000
 - `frontend/`: React Vite app with StatusBar, OpenPosition, EquityCurve, TradeLog, PerformanceCard
 
 ### Phase 7 — Backtesting ✅
-- `backtest/runner.py`: fetch 1y Binance candles, replay pipeline, compute Sharpe
-- Gate: Sharpe > 1.0 before PAPER_MODE=false
+- `backtest/runner.py`: fetch Binance history, replay the strategy, compute Sharpe
+- Gate: Sharpe > 1.0 before any live trading
+
+### Phase 8 — Strategy rework: spot buy-only, fees included ✅ (gate not passed)
+- `backtest/engine.py`: buy-only simulation with a 0.1% fee per side, stop/target filled inside the candle (stop first if both touch), daily-return Sharpe (×√365), buy-and-hold comparison
+- Paper trading uses the same exit rule and fee-inclusive P&L; `long_entries()` and `generate_signal()` agree candle for candle (checked on 4,000 real candles)
+- Protocol: 4 years of BTC/USDT candles (2022-09 → 2026-09). Settings chosen on 2022-09-20 → 2025-03-19, then tested once on unseen 2025-03-20 → 2026-09-19. Gate: unseen Sharpe > 1.0 with ≥ 20 trades
+- Results (2026-09-19): 0 of 49 hourly and 0 of 49 four-hour variants passed (EMA cross + trend filter, breakout + trend, dip in uptrend)
+  - Current rules on the unseen period: 0% before fees, −10.1% after. Best hourly variant: +18.4% before fees, −14.0% after
+  - Four-hour breakouts reached Sharpe 1.52 on the tuning period (BTC +344%) and lost money on unseen data
+- Kept the current 4 rules, since no variant did better on unseen data; the bot stays in paper mode
+
+### Phase 9 — Live trading on Binance spot (blocked until a strategy passes the gate)
+- The user puts their real API key and secret in `backend/.env` (trading on, withdrawals off); never pasted into chat or committed
+- `MAX_CAPITAL_USDT` cap in `.env`; size each trade from min(cap, free USDT)
+- Market buy, then an exchange-side OCO sell (take-profit limit + stop-loss) so the position stays protected while the PC is off
+- Sell the BTC actually received (the fee comes out of the bought asset unless paid in BNB); respect lot size and minimum order value
+- Record real fills and fees; reconcile open orders and positions with the exchange on startup
+- Validate orders against Binance's test-order endpoint (real account, nothing executed) before switching on
+- Dashboard: live badge driven by `/api/status`, real balance. Until then `main.py` refuses to start with `PAPER_MODE=false`
 
 ---
 
-## Future Phase: ML Integration (Phase 8+)
+## Future Phase: ML Integration (Phase 10+)
 
-> Do not build until Phases 1–7 complete and 2+ weeks of paper trade data collected.
+> Do not build until live trading (Phase 9) is settled and 2+ weeks of paper trade data are collected.
 
 - **Model:** GradientBoostingClassifier (scikit-learn)
 - **Features:** indicator values at signal time
@@ -271,6 +295,8 @@ DASHBOARD_PORT= 8000
 5. Indicators compute on 200-candle window with no NaN in last row
 6. Signal returns a Signal object with non-empty reason string
 7. Paper LONG → logged in SQLite → visible in dashboard
-8. Time-exit fires at 23h in paper mode
+8. Time-exit fires at the 23rd hourly check in paper mode
 9. Backtest on 1y completes; equity curve shown
+10. Backtest and paper P&L are buy-only and include fees; a candle touching the stop or target closes the trade at that price
+11. `python backend/main.py` exits with a message when `PAPER_MODE=false` (until Phase 9)
 10. `.env` is gitignored; CONTEXT.md is up to date

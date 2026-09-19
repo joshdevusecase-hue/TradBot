@@ -59,7 +59,13 @@ export default function PerformanceCard() {
             <Stat label="Sharpe" value={result.sharpe?.toFixed(2)} />
             <Stat label="Max DD" value={`${result.max_drawdown_pct?.toFixed(1)}%`} red />
             <Stat label="RR ratio" value={result.rr_ratio?.toFixed(2)} />
+            <Stat label="Fees paid" value={fmt$(result.fees_paid)} red />
+            <Stat label="Buy & hold" value={`${result.buy_hold_pct >= 0 ? "+" : ""}${result.buy_hold_pct?.toFixed(2)}%`} />
           </div>
+          <p className="bt-note">
+            Buy-only on spot, {result.fee_pct}% fee on each buy and sell, stops and targets filled inside the hour.
+            Buy &amp; hold is what simply holding BTC over the same days returned.
+          </p>
 
           {result.equity_curve?.length > 2 && (
             <ResponsiveContainer width="100%" height={180}>

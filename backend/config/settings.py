@@ -18,8 +18,7 @@ CANDLE_LIMIT: int = 200  # candles to fetch per run
 EMA_FAST: int = 9
 EMA_SLOW: int = 21
 RSI_PERIOD: int = 14
-RSI_LONG_MAX: float = 65.0   # skip long entry above this RSI
-RSI_SHORT_MIN: float = 35.0  # skip short entry below this RSI
+RSI_LONG_MAX: float = 65.0   # skip buy entries above this RSI
 MACD_FAST: int = 12
 MACD_SLOW: int = 26
 MACD_SIGNAL: int = 9
@@ -32,6 +31,7 @@ SL_ATR_MULT: float = 1.5   # stop-loss distance in ATR multiples
 TP_ATR_MULT: float = 2.5   # take-profit distance in ATR multiples
 RISK_PCT: float = 2.0       # % of portfolio to risk per trade
 MAX_HOLD_HRS: int = 23      # hard time-exit after this many hours
+FEE_PCT: float = 0.1        # Binance spot fee per side (%), charged on entry and exit
 
 # Dashboard
 DASHBOARD_HOST: str = "0.0.0.0"

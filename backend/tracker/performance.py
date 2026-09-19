@@ -1,7 +1,11 @@
 import math
+import pandas as pd
 from sqlalchemy.orm import Session
 from db import engine, Trade
 from config.settings import STARTING_CAPITAL
+
+# A Sharpe ratio from a handful of days is noise; report none until there's a month of history.
+_MIN_SHARPE_DAYS = 30
 
 
 def get_portfolio_value() -> float:
@@ -26,7 +30,7 @@ def get_performance() -> dict:
             "avg_win": 0.0,
             "avg_loss": 0.0,
             "rr_ratio": 0.0,
-            "sharpe": 0.0,
+            "sharpe": None,
             "max_drawdown_pct": 0.0,
             "portfolio_value": STARTING_CAPITAL,
         }
@@ -41,14 +45,16 @@ def get_performance() -> dict:
     avg_loss = abs(sum(losses) / len(losses)) if losses else 0.0
     rr_ratio = avg_win / avg_loss if avg_loss > 0 else 0.0
 
-    # Simplified Sharpe (annualised assuming each trade ≈ 1 trading day)
-    if len(pnls) > 1:
-        mean_p = sum(pnls) / len(pnls)
-        variance = sum((p - mean_p) ** 2 for p in pnls) / len(pnls)
-        std_p = math.sqrt(variance)
-        sharpe = (mean_p / std_p * math.sqrt(252)) if std_p > 0 else 0.0
-    else:
-        sharpe = 0.0
+    # Daily Sharpe on realised equity, annualised over 365 days like the backtest
+    daily_pnl = pd.Series(pnls, index=pd.DatetimeIndex([t.exit_time for t in closed]).floor("D"))
+    days = pd.date_range(pd.Timestamp(min(t.entry_time for t in closed)).floor("D"),
+                         pd.Timestamp.now(tz="UTC").floor("D"), freq="D")
+    daily_equity = STARTING_CAPITAL + daily_pnl.groupby(level=0).sum().reindex(days, fill_value=0.0).cumsum()
+    rets = daily_equity.pct_change()
+    rets.iloc[0] = daily_equity.iloc[0] / STARTING_CAPITAL - 1
+    sharpe = None
+    if len(rets) >= _MIN_SHARPE_DAYS:
+        sharpe = float(rets.mean() / rets.std() * math.sqrt(365)) if rets.std() > 0 else 0.0
 
     # Max drawdown
     equity, peak, max_dd = STARTING_CAPITAL, STARTING_CAPITAL, 0.0
@@ -67,7 +73,7 @@ def get_performance() -> dict:
         "avg_win": round(avg_win, 2),
         "avg_loss": round(avg_loss, 2),
         "rr_ratio": round(rr_ratio, 2),
-        "sharpe": round(sharpe, 2),
+        "sharpe": round(sharpe, 2) if sharpe is not None else None,
         "max_drawdown_pct": round(max_dd, 2),
         "portfolio_value": round(STARTING_CAPITAL + total_pnl, 2),
     }

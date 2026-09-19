@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: process.env.TRADBOT_API ?? "http://localhost:8000",
         changeOrigin: true,
       },
     },

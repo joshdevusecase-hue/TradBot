@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from db import engine, Trade
+from config.settings import FEE_PCT
 
 
 def open_trade(
@@ -31,19 +32,19 @@ def open_trade(
         return trade.id
 
 
-def close_trade(trade_id: int, exit_price: float, exit_reason: str) -> Optional[Trade]:
-    """Set exit fields and compute P&L. Returns the updated trade or None."""
+def close_trade(
+    trade_id: int, exit_price: float, exit_reason: str, exit_time: Optional[datetime] = None
+) -> Optional[Trade]:
+    """Set exit fields and compute buy-side P&L net of fees on both sides. Returns the updated trade or None."""
     with Session(engine) as session:
         trade = session.get(Trade, trade_id)
         if trade is None:
             return None
         trade.exit_price = exit_price
-        trade.exit_time = datetime.now(tz=timezone.utc)
+        trade.exit_time = exit_time or datetime.now(tz=timezone.utc)
         trade.exit_reason = exit_reason
-        if trade.direction == "LONG":
-            trade.pnl = round((exit_price - trade.entry_price) * trade.quantity, 2)
-        else:
-            trade.pnl = round((trade.entry_price - exit_price) * trade.quantity, 2)
+        fee = FEE_PCT / 100.0
+        trade.pnl = round(trade.quantity * (exit_price * (1 - fee) - trade.entry_price * (1 + fee)), 2)
         session.commit()
         session.refresh(trade)
         # Detach so the object can be used outside the session

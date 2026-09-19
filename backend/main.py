@@ -1,6 +1,7 @@
 import logging
 import sys
 import uvicorn
+from config.settings import PAPER_MODE
 from db import init_db
 from scheduler import create_scheduler
 from dashboard.app import app  # noqa: F401 — imported for uvicorn
@@ -17,6 +18,11 @@ logging.basicConfig(
 
 
 def main() -> None:
+    if not PAPER_MODE:
+        # executor/orders.py has no spending cap or exchange-side stops yet (PLAN.md Phase 9).
+        sys.exit("PAPER_MODE=false, but live trading isn't built yet (PLAN.md Phase 9). "
+                 "Set PAPER_MODE=true in backend/.env to run the bot on paper.")
+
     print("\n" + "=" * 56)
     print("  TradBot starting up")
     print("=" * 56)

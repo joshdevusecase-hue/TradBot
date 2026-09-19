@@ -48,7 +48,7 @@ def run_pipeline() -> None:
         closed = executor.check_exits(current_price)
 
         # 7. Open new position if signal fired and no open trade
-        if not closed and signal.direction in ("LONG", "SHORT") and signal.atr > 0:
+        if not closed and signal.direction == "LONG" and signal.atr > 0:
             from tracker.trades import get_open_trade
             if get_open_trade(SYMBOL) is None:
                 executor.enter(signal, current_price)

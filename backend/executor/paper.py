@@ -3,15 +3,18 @@ Paper trading executor.
 Delegates entirely to tracker/trades.py — no exchange calls.
 Exists so scheduler.py can call execute(signal) without caring about paper vs live.
 """
+import logging
+import pandas as pd
 from strategy.signals import Signal
 from tracker.trades import open_trade, close_trade, get_open_trade
 from risk.manager import (
     size_position, stop_loss_price, take_profit_price,
-    check_sl_tp, should_time_exit,
+    intrabar_exit, should_time_exit,
 )
 from tracker.performance import get_portfolio_value
+from data.cache import load_candles
+from data.fetcher import closed_candles
 from config.settings import SYMBOL
-import logging
 
 logger = logging.getLogger("tradbot.paper")
 
@@ -44,19 +47,22 @@ def enter(signal: Signal, current_price: float) -> int | None:
 
 
 def check_exits(current_price: float) -> bool:
-    """Check if the current open position should be closed. Returns True if closed."""
+    """Close the open trade if a finished candle since entry touched its stop or target
+    (as resting exchange orders would fill), or its time is up. Returns True if closed."""
     trade = get_open_trade(SYMBOL)
     if trade is None:
         return False
 
-    trigger = check_sl_tp(current_price, trade.entry_price, trade.sl_price, trade.tp_price, trade.direction)
-    time_up = should_time_exit(trade.entry_time)
+    candles = closed_candles(load_candles())
+    for ts, c in candles[candles.index >= pd.Timestamp(trade.entry_time).floor("h")].iterrows():
+        hit = intrabar_exit(c["open"], c["high"], c["low"], trade.sl_price, trade.tp_price)
+        if hit is not None:
+            price, reason = hit
+            close_trade(trade.id, price, reason, exit_time=(ts + pd.Timedelta(hours=1)).to_pydatetime())
+            logger.info(f"[PAPER] Closed #{trade.id} via {reason} at {price} (candle {ts:%H:%M} UTC)")
+            return True
 
-    if trigger:
-        close_trade(trade.id, current_price, trigger)
-        logger.info(f"[PAPER] Closed #{trade.id} via {trigger} at {current_price}")
-        return True
-    if time_up:
+    if should_time_exit(trade.entry_time):
         close_trade(trade.id, current_price, "Time exit")
         logger.info(f"[PAPER] Closed #{trade.id} via Time exit at {current_price}")
         return True

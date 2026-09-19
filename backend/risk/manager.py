@@ -33,6 +33,21 @@ def should_time_exit(entry_time: datetime) -> bool:
     return round(held_hours) >= MAX_HOLD_HRS
 
 
+def intrabar_exit(open_: float, high: float, low: float, sl: float, tp: float) -> tuple[float, str] | None:
+    """How resting stop-loss and take-profit sell orders fill within one candle of a buy position.
+
+    The stop wins when both are touched (the candle's path is unknown), and a gap below the
+    stop fills at the open.
+    """
+    if open_ <= sl:
+        return open_, "Stop loss"
+    if low <= sl:
+        return sl, "Stop loss"
+    if high >= tp:
+        return tp, "Take profit"
+    return None
+
+
 def check_sl_tp(current_price: float, entry: float, sl: float, tp: float, direction: str) -> str | None:
     """Return 'Take profit', 'Stop loss', or None."""
     if direction == "LONG":
