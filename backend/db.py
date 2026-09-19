@@ -52,7 +52,7 @@ class Trade(Base):
     __tablename__ = "trades"
     id = Column(Integer, primary_key=True)
     symbol = Column(String, nullable=False)
-    direction = Column(String, nullable=False)   # LONG | SHORT
+    direction = Column(String, nullable=False)   # LONG (spot, buy-only)
     entry_price = Column(Float, nullable=False)
     exit_price = Column(Float, nullable=True)
     quantity = Column(Float, nullable=False)
@@ -61,9 +61,27 @@ class Trade(Base):
     entry_time = Column(UTCDateTime, nullable=False)
     exit_time = Column(UTCDateTime, nullable=True)
     pnl = Column(Float, nullable=True)
-    exit_reason = Column(String, nullable=True)  # Take profit | Stop loss | Time exit
+    exit_reason = Column(String, nullable=True)  # Take profit | Stop loss | Time exit | ...
     signal_reason = Column(String, nullable=False)
+    mode = Column(String, nullable=False, default="paper", server_default="paper")  # paper | live
+    entry_cost = Column(Float, nullable=True)       # USDT spent, fees included
+    entry_order_id = Column(String, nullable=True)  # live: Binance market-buy orderId
+    exit_order_id = Column(String, nullable=True)   # live: Binance OCO orderListId
+
+
+# Columns added after the trades table first shipped; create_all never alters an existing table.
+_ADDED_TRADE_COLUMNS = {
+    "mode": "VARCHAR NOT NULL DEFAULT 'paper'",
+    "entry_cost": "FLOAT",
+    "entry_order_id": "VARCHAR",
+    "exit_order_id": "VARCHAR",
+}
 
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(trades)")}
+        for name, ddl in _ADDED_TRADE_COLUMNS.items():
+            if name not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE trades ADD COLUMN {name} {ddl}")

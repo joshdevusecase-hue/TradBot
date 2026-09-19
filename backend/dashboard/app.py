@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from db import engine, Trade
 from tracker.performance import get_performance, get_equity_curve
-from config.settings import PAPER_MODE, SYMBOL
+from config.settings import PAPER_MODE, SYMBOL, TRADE_MODE, MAX_CAPITAL_USDT, MAX_HOLD_HRS
 from state import bot_state
 
 logger = logging.getLogger("tradbot.api")
@@ -27,6 +27,7 @@ def get_status():
     return {
         **bot_state,
         "symbol": SYMBOL,
+        "max_capital_usdt": None if PAPER_MODE else MAX_CAPITAL_USDT,
         "server_time": datetime.now(tz=timezone.utc).isoformat(),
     }
 
@@ -38,7 +39,7 @@ def get_position():
     with Session(engine) as session:
         trade = (
             session.query(Trade)
-            .filter(Trade.symbol == SYMBOL, Trade.exit_price.is_(None))
+            .filter(Trade.symbol == SYMBOL, Trade.mode == TRADE_MODE, Trade.exit_price.is_(None))
             .order_by(Trade.entry_time.desc())
             .first()
         )
@@ -58,17 +59,13 @@ def get_position():
     except Exception:
         current_price = t["entry_price"]
 
-    if t["direction"] == "LONG":
-        unrealised = round((current_price - t["entry_price"]) * t["quantity"], 2)
-    else:
-        unrealised = round((t["entry_price"] - current_price) * t["quantity"], 2)
-
+    unrealised = round((current_price - t["entry_price"]) * t["quantity"], 2)
     cost_basis = t["entry_price"] * t["quantity"]
     pct = round((unrealised / cost_basis) * 100, 2) if cost_basis else 0.0
 
     entry_time: datetime = t["entry_time"]
     hours_held = (datetime.now(tz=timezone.utc) - entry_time).total_seconds() / 3600
-    time_remaining = round(max(0.0, 23.0 - hours_held), 1)
+    time_remaining = round(max(0.0, MAX_HOLD_HRS - hours_held), 1)
 
     return {
         "open": True,
@@ -88,6 +85,7 @@ def get_trades(limit: int = 50):
     with Session(engine) as session:
         trades = (
             session.query(Trade)
+            .filter(Trade.mode == TRADE_MODE)
             .order_by(Trade.entry_time.desc())
             .limit(limit)
             .all()

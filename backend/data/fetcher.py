@@ -6,21 +6,27 @@ from config.settings import (
 )
 
 
-def _build_exchange() -> ccxt.binance:
+def build_exchange(with_keys: bool = not PAPER_MODE) -> ccxt.binance:
     # Paper mode only reads public market data, so it runs keyless against the real market.
-    keys = {} if PAPER_MODE else {"apiKey": BINANCE_API_KEY, "secret": BINANCE_SECRET}
+    keys = {"apiKey": BINANCE_API_KEY, "secret": BINANCE_SECRET} if with_keys else {}
     return ccxt.binance({
         **keys,
         "enableRateLimit": True,
         "options": {
             "defaultType": "spot",
-            # Only market data is needed; skip the signed currency-metadata call.
+            # Load spot markets only. ccxt also loads futures markets by default and, with keys,
+            # makes signed margin-pair calls that a spot-only bot never needs.
+            "fetchMarkets": {"types": ["spot"]},
+            "fetchMargins": False,
+            # Skip the signed wallet-metadata call; the bot never needs it.
             "fetchCurrencies": False,
+            # Binance rejects signed requests when the PC clock drifts; sync with its clock first.
+            "adjustForTimeDifference": with_keys,
         },
     })
 
 
-_exchange: ccxt.binance = _build_exchange()
+_exchange: ccxt.binance = build_exchange()
 
 
 def fetch_ohlcv(symbol: str = SYMBOL, timeframe: str = TIMEFRAME, limit: int = CANDLE_LIMIT) -> pd.DataFrame:

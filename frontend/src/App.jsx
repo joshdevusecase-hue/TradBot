@@ -12,7 +12,7 @@ export default function App() {
         <div className="header-brand">
           <span className="header-logo">⚡</span>
           <span className="header-name">TradBot</span>
-          <span className="header-sub">BTC/USDT · Paper Mode</span>
+          <span className="header-sub">Binance spot · BTC/USDT</span>
         </div>
       </header>
       <StatusBar />

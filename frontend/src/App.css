@@ -70,6 +70,8 @@ body {
 .badge { font-size: 11px; font-weight: 600; border-radius: 4px; padding: 2px 7px; }
 .badge-paper { background: #1f2d1f; color: var(--green); border: 1px solid #2a4a2a; }
 .badge-live  { background: #2d1f1f; color: var(--red);   border: 1px solid #4a2a2a; }
+.badge-gate-locked { background: #2a2212; color: var(--yellow); border: 1px solid #4a3a14; }
+.badge-gate-open   { background: #1f2d1f; color: var(--green);  border: 1px solid #2a4a2a; }
 
 .signal-chip { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 4px; }
 .signal-long  { background: #1f2d1f; color: var(--green); }

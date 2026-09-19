@@ -19,20 +19,18 @@ export default function StatusBar() {
       <div className="status-left">
         <span className="dot dot-offline" />
         <span>
-          <strong className="offline-label">Backend offline.</strong> Start it with <code>python main.py</code> in
-          the <code>backend</code> folder. Checking again every 15s.
+          <strong className="offline-label">Backend offline.</strong> Start it with <code>python backend/main.py</code> in
+          the TradBot folder. Checking again every 15s.
         </span>
       </div>
     </div>
   );
   if (!status) return <div className="status-bar status-loading">Connecting…</div>;
 
-  const modeLabel = status.paper_mode ? "Paper" : "Live";
+  const modeLabel = status.paper_mode ? "Paper" : `Live · cap ${status.max_capital_usdt?.toLocaleString()} USDT`;
   const modeClass = status.paper_mode ? "badge-paper" : "badge-live";
-  const signalClass =
-    status.last_signal === "LONG" ? "signal-long" :
-    status.last_signal === "SHORT" ? "signal-short" :
-    "signal-flat";
+  const signalClass = status.last_signal === "LONG" ? "signal-long" : "signal-flat";
+  const gate = status.gate;
 
   return (
     <div className="status-bar">
@@ -40,6 +38,12 @@ export default function StatusBar() {
         <span className={`dot ${status.running ? "dot-active" : "dot-idle"}`} />
         <span className="status-label">{status.running ? "Running pipeline…" : "Waiting for next hour"}</span>
         <span className={`badge ${modeClass}`}>{modeLabel}</span>
+        {gate && (
+          <span className={`badge ${gate.passed ? "badge-gate-open" : "badge-gate-locked"}`}
+                title={`Live buys need a ${gate.rule}`}>
+            {gate.passed ? "Live trading unlocked" : "Live trading locked"} · Sharpe {gate.sharpe ?? "—"}
+          </span>
+        )}
         <span className="status-symbol">{status.symbol}</span>
       </div>
       <div className="status-right">

@@ -4,7 +4,7 @@
 
 Build a personal, locally-hosted automated crypto trading bot for a **complete trading beginner** that:
 - Trades **BTC/USDT on Binance spot, buy-only**, with no human intervention
-- End goal: **live trading on the user's real Binance account**, within a USDT cap the user sets (Phase 9, after a strategy passes the gate)
+- End goal: **live trading on the user's real Binance account**, within a USDT cap the user sets (Phase 9: built, unlocks when a strategy passes the gate)
 - Holds positions for a **maximum of 24 hours** (intraday swing)
 - Uses **pure technical indicators** — transparent, no ML, no external data needed (Phase 1–8)
 - ML integration is planned as a separate future phase (Phase 10+)
@@ -33,7 +33,8 @@ flowchart TD
         SIG["strategy/signals.py\nBuy signal: LONG / FLAT + reason"]
         RISK["risk/manager.py\nPosition size · SL · TP · time-exit"]
         EXEC_P["executor/paper.py\nPaper fills · stop/target vs candle high/low"]
-        EXEC_L["executor/orders.py\nLive orders (Phase 9; startup blocked)"]
+        EXEC_L["executor/orders.py\nLive: market buy + OCO stop/target held by Binance"]
+        GATE["backtest/gate.py\nStrategy gate: 365-day Sharpe > 1.0"]
         TRACK["tracker/trades.py\nLog trade to SQLite"]
     end
 
@@ -61,7 +62,8 @@ flowchart TD
     SIG --> RISK
     RISK -->|PAPER_MODE=true| EXEC_P
     RISK -->|PAPER_MODE=false| EXEC_L
-    EXEC_L -->|place order| BINANCE
+    GATE -->|unlocks live buys| EXEC_L
+    EXEC_L -->|market buy + OCO| BINANCE
     EXEC_P --> TRACK
     EXEC_L --> TRACK
     TRACK --> DB
@@ -72,6 +74,7 @@ flowchart TD
     RT -->|JSON / Axios| LOG
     BINANCE -->|history| BT
     BT --> RT
+    BT --> GATE
     RT -->|JSON / Axios| PERF
 ```
 
@@ -150,7 +153,7 @@ TradBot/                     # repo root
 │   ├── risk/
 │   │   └── manager.py       # Position size, SL/TP prices, time-exit logic
 │   ├── executor/
-│   │   ├── orders.py        # Place market orders via CCXT (no exchange-side SL/TP yet)
+│   │   ├── orders.py        # Live: market buy within the cap + OCO stop/target held by Binance
 │   │   └── paper.py         # Paper engine: simulate fills when PAPER_MODE=true
 │   ├── tracker/
 │   │   ├── trades.py        # SQLAlchemy Trade model — log every trade
@@ -159,9 +162,12 @@ TradBot/                     # repo root
 │   │   └── app.py           # FastAPI REST API routes (JSON only)
 │   ├── backtest/
 │   │   ├── engine.py        # Buy-only simulation: fees, intra-candle stops, daily Sharpe
+│   │   ├── gate.py          # Strategy gate that locks live buys (365-day Sharpe > 1.0)
 │   │   └── runner.py        # Fetch Binance history + run the engine for /api/backtest
 │   ├── scheduler.py         # APScheduler: run full pipeline every 1h
-│   ├── main.py              # Entry point: start scheduler + FastAPI together
+│   ├── main.py              # Entry point: start scheduler + FastAPI together (live preflight)
+│   ├── check_live.py        # Read-only live-trading readiness check (user runs it)
+│   ├── tests/               # live_sim.py: live-trading scenarios on a simulated Binance
 │   ├── requirements.txt
 │   └── .env.example
 │
@@ -261,14 +267,18 @@ DASHBOARD_PORT= 8000
   - Four-hour breakouts reached Sharpe 1.52 on the tuning period (BTC +344%) and lost money on unseen data
 - Kept the current 4 rules, since no variant did better on unseen data; the bot stays in paper mode
 
-### Phase 9 — Live trading on Binance spot (blocked until a strategy passes the gate)
-- The user puts their real API key and secret in `backend/.env` (trading on, withdrawals off); never pasted into chat or committed
-- `MAX_CAPITAL_USDT` cap in `.env`; size each trade from min(cap, free USDT)
-- Market buy, then an exchange-side OCO sell (take-profit limit + stop-loss) so the position stays protected while the PC is off
-- Sell the BTC actually received (the fee comes out of the bought asset unless paid in BNB); respect lot size and minimum order value
-- Record real fills and fees; reconcile open orders and positions with the exchange on startup
-- Validate orders against Binance's test-order endpoint (real account, nothing executed) before switching on
-- Dashboard: live badge driven by `/api/status`, real balance. Until then `main.py` refuses to start with `PAPER_MODE=false`
+### Phase 9 — Live trading on Binance spot ✅ built, locked until a strategy passes the gate
+- The user puts their real API key and secret plus `MAX_CAPITAL_USDT` in `backend/.env` (key: Spot & Margin Trading on, withdrawals off); never pasted into chat or committed
+- `executor/orders.py`: market buy sized from min(`MAX_CAPITAL_USDT`, free USDT) with the same 2% risk rule, then at once an OCO sell held by Binance: LIMIT_MAKER take-profit above, STOP_LOSS (market) stop below (STOP_LOSS_LIMIT fallback). The position stays protected while the PC is off
+- Sells the BTC actually received (the buy fee comes out of the BTC unless paid in BNB); lot size, price tick and the 5 USDT minimum are respected; P&L comes from real fills and fees
+- Hourly check records OCO fills and sells at market whatever has no working stop: OCO rejected, target only partly filled, orders cancelled on Binance, or a crash between buy and OCO. It also makes the 23-hour exit (cancel the pair, then sell); a fill that races the cancel is recorded as that fill
+- `backtest/gate.py`: live buys need a 365-day backtest (fees included) with Sharpe > 1.0 over ≥ 20 trades. `main.py` won't start live otherwise; the gate is re-checked daily at 00:05 UTC, and a failing check pauses new buys while open trades are still managed
+- `main.py` live preflight, in order: cap set, keys set, gate passed, account can trade. No signed request is made while the gate fails
+- `check_live.py`: read-only readiness check the user runs (keys, account, key permissions, OCO support, a validated-but-not-executed test buy, the gate). It never places an order or prints keys
+- Trades carry `mode` (paper/live), `entry_cost` and Binance order ids; `init_db()` adds these columns to existing databases. The dashboard and stats show only the running mode's trades
+- Market data loads spot only (`fetchMarkets` spot, `fetchMargins` off), so loading markets needs no signed request
+- Tested against a simulated Binance (real market rules, faked order endpoints) across 16 scenarios: `python backend/tests/live_sim.py`. Never run against the real account
+- State on 2026-09-19: gate locked (365-day Sharpe −0.39 over 42 trades), so the bot keeps paper trading
 
 ---
 
@@ -298,5 +308,6 @@ DASHBOARD_PORT= 8000
 8. Time-exit fires at the 23rd hourly check in paper mode
 9. Backtest on 1y completes; equity curve shown
 10. Backtest and paper P&L are buy-only and include fees; a candle touching the stop or target closes the trade at that price
-11. `python backend/main.py` exits with a message when `PAPER_MODE=false` (until Phase 9)
+11. With `PAPER_MODE=false`, `python backend/main.py` refuses to start unless the cap, keys, strategy gate and account all pass
+12. `python backend/check_live.py` reports readiness without placing any order
 10. `.env` is gitignored; CONTEXT.md is up to date

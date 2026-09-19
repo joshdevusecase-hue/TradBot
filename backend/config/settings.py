@@ -8,6 +8,17 @@ load_dotenv()
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_SECRET: str = os.getenv("BINANCE_SECRET", "")
 PAPER_MODE: bool = os.getenv("PAPER_MODE", "true").lower() == "true"
+TRADE_MODE: str = "paper" if PAPER_MODE else "live"
+
+# Live trading: the most USDT the bot may put into a trade, even if the account holds more.
+# 0 (unset) keeps live trading off.
+MAX_CAPITAL_USDT: float = float(os.getenv("MAX_CAPITAL_USDT") or 0)
+
+# Strategy gate: live buys are only allowed while a fresh backtest of the current strategy
+# (fees included) clears this bar. Checked when the bot starts and daily after that.
+GATE_DAYS: int = 365
+GATE_MIN_SHARPE: float = 1.0
+GATE_MIN_TRADES: int = 20
 
 # Trading pair
 SYMBOL: str = "BTC/USDT"

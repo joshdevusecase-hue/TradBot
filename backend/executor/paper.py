@@ -1,7 +1,6 @@
 """
-Paper trading executor.
-Delegates entirely to tracker/trades.py — no exchange calls.
-Exists so scheduler.py can call execute(signal) without caring about paper vs live.
+Paper trading executor: simulated fills recorded in SQLite, no exchange orders.
+Same interface as executor/orders.py (enter, check_exits) so scheduler.py doesn't care which runs.
 """
 import logging
 import pandas as pd
@@ -17,6 +16,8 @@ from data.fetcher import closed_candles
 from config.settings import SYMBOL
 
 logger = logging.getLogger("tradbot.paper")
+
+MODE = "paper"
 
 
 def enter(signal: Signal, current_price: float) -> int | None:
@@ -38,6 +39,7 @@ def enter(signal: Signal, current_price: float) -> int | None:
         sl_price=sl,
         tp_price=tp,
         signal_reason=signal.reason,
+        mode=MODE,
     )
     logger.info(
         f"[PAPER] Opened {signal.direction} #{trade_id} "
@@ -49,7 +51,7 @@ def enter(signal: Signal, current_price: float) -> int | None:
 def check_exits(current_price: float) -> bool:
     """Close the open trade if a finished candle since entry touched its stop or target
     (as resting exchange orders would fill), or its time is up. Returns True if closed."""
-    trade = get_open_trade(SYMBOL)
+    trade = get_open_trade(SYMBOL, MODE)
     if trade is None:
         return False
 
